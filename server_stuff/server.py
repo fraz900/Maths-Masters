@@ -2,15 +2,24 @@ import socket
 import secrets
 import hashlib
 import time
+import threading
 
 class connection():
     def __init__(self):
+        #network things
         self.s = socket.socket()
         self.PORT = 12345
+        #codes
         self.FAILURE = "400"
         self.ERROR = "401"
         self.GOAHEAD = "200"
-    def main(self):             
+        #files
+        self.AUTHCODES = "active_auth_codes.txt"
+        self.REFRESHCODES = "refresh_codes.txt"
+        #commands
+        self.REFRESHAUTH = "rac"
+        
+    def start(self)->None:             
         self.s.bind(("",self.PORT))
         self.s.listen(5)
         while True:
@@ -18,25 +27,37 @@ class connection():
             
             print("got connection from",addr)
             
-            c.send(self.GOAHEAD.encode())
-            
-            data = c.recv(1024)
-            command = data.decode()
-            command = command.strip()
-            if command == "ra":
-                c.send(self.GOAHEAD.encode())
-                data = c.recv(1024)
-                data = data.decode()
-                self.refresh_token(c,data)
-            
-            else:
-                c.send(self.ERROR.encode())
-                c.close()
-            print(command)
-            
+            threading.Thread(target=self.handler,args=[c]).start()
 
-    def refresh_token(self,user,refresh_code):
-        file = open("refresh_codes.txt","r")
+    def handler(self,c)->None:
+        self._send_message(c,self.GOAHEAD)
+        command = self._recieve_message(c)
+        if not command:
+            return
+        command = command.strip()
+        match command:
+            case self.REFRESHAUTH:
+                threading.Thread(target=self.refresh_token,args=[c]).start()
+            case _:
+                self._send_message(c,self.FAILURE)
+                c.close()
+        print(command)
+
+    def _send_message(self,sock,message)->None:
+        sock.sendall(message.encode())
+    def _recieve_message(self,sock)-> str:
+        try:
+            data = sock.recv(1024)
+            return(data.decode())
+        except ConnectionResetError:
+            return False
+    
+    def refresh_token(self,user):
+        self._send_message(user,self.GOAHEAD)
+        refresh_code = self._recieve_message(user)
+        if not refresh_code:
+            return
+        file = open(self.REFRESHCODES,"r")
         codes = file.read()
         file.close()
         codes = codes.split("\n")
@@ -50,24 +71,24 @@ class connection():
 
         if passed:
             auth_code = secrets.token_hex(32)
-            user.send(auth_code.encode())
+            self._send_message(user,auth_code)
             user.close()
             current_time = time.time()
-            file = open("active_auth_codes.txt","a")
+            file = open(self.AUTHCODES,"a")
             addition = f"{person},{auth_code},{current_time}\n"
             file.write(addition)
             file.close()
         else:
-            user.send(self.FAILURE.encode())
+            self._send_message(user,self.FAILURE)
             user.close()
 
     def check_auth(self,auth_code):
-        file = open("active_auth_codes.txt","r")
+        file = open(self.AUTHCODES,"r")
         content = file.read()
         file.close()
         content = content.split("\n")
         for line in content:
-            line = line.split("\n")
+            line = line.split(",")
             check = line[1]
 
             if auth_code == check:
@@ -78,7 +99,34 @@ class connection():
                     return True
                 
             return False
+    def clear_codes(self,file_name,time_limit):
+        file = open(file_name,"r")
+        content = file.read()
+        file.close()
+        content = content.split("\n")
+        for line in content:
+            formated_line = line.split(",")
+            if "," not in line:
+                content.remove(line)
+            try:
+                time_check = formated_line[2]
+            except IndexError:
+                None
+            current_time = time.time()
+            time_check = float(time_check)
+            if (current_time - time_check) > time_limit:
+                content.remove(line)
 
-a = connection()
-a.main()
+        final = ""
+        for line in content:
+            final += line
+            final += "\n"
+        file = open(self.AUTHCODES,"w")
+        file.write(final)
+        file.close()
+
+if __name__ == "__main__":
+    a = connection()
+    a.clear_codes("active_auth_codes.txt",3600)
+    a.start()
 
