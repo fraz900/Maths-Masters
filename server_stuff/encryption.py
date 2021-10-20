@@ -1,4 +1,3 @@
-#remove for production
 import secrets
 import sys
 class information():
@@ -9,17 +8,43 @@ class information():
                                 ["00000001","00000010","00000011","00000001"],
                                 ["00000001","00000001","00000010","00000011"],
                                 ["00000011","00000001","00000001","00000010"]]
-
+    def __repr__(self):
+        return self.data
     def generate_key(self):
         key = secrets.token_bytes(20)
         bin_key = bin(int.from_bytes(key, byteorder=sys.byteorder))
         fkey = bin_key.replace("0b","0")
         fkey = fkey[:128]
         return fkey
+
     def encrypt(self,key):
+        blocks = self._blocks(self.data)
+        final = []
+        for block in blocks:
+            ciphertext = self._encrypting(key,block)
+            final.append(ciphertext)
+        output = ""
+        for value in final:
+            output += value + " "
+        self.data = output
+        return output
+
+    def decrypt(self,key):
+        data = self.data.split(" ")
+        answers = []
+        for ciphertext in data:
+            plaintext = self._decrypting(key,ciphertext)
+            readable = self._binary2text(plaintext)[:4]
+            answers.append(readable)
+        final = "".join(answers)
+        self.data = final
+        return final
+    
+    def _encrypting(self,key,data):
         result = ""
         #byte substitution
-        chunks = self._matrix(self.data)
+        #chunks = self._matrix(self.data)
+        chunks = self._matrix(data)
         #shift rows
         for chunk in chunks:
             thing = self._encryptor(chunk,key,0)
@@ -70,7 +95,7 @@ class information():
         actual = self._encryptor(matrix,key,count)
         return actual
 
-    def decrypt(self,key,ciphertext):
+    def _decrypting(self,key,ciphertext):
         grids = []
         for i in range(0,len(ciphertext),128):
             holder = ciphertext[i:i+128]
@@ -81,20 +106,15 @@ class information():
         return result
 
     def _decryptor(self,key,grid,counter):
-        print("ello")
         unkeyed = self._xor(grid,key)
-        #chunks = self._matrix(unkeyed,binary=True)
-        print("unkeyed",unkeyed)
         thing = []
         for i in range(0,len(unkeyed),8):
             holder = unkeyed[i:i+8]
             thing.append(holder)
-        print(thing,"thing")
         chunks = []
         for i in range(0,len(thing),4):
             holder = thing[i:i+4]
             chunks.append(holder)
-        print("chunks",chunks)
         final = ""
         for chunk in chunks:
             matrix = []
@@ -126,8 +146,6 @@ class information():
             for row in new_matrix:
                 for element in row:
                     concat += element
-            print(f"concat {concat}")
-            print()
             final += concat
         if counter > 3:
             return final
@@ -138,13 +156,13 @@ class information():
 
         
 
-    def _xor(self,binary1,binary2): #tick
+    def _xor(self,binary1,binary2):
         final = ""
         if len(binary1) != len(binary2):
             print("bin1",binary1)
             print("bin2",binary2)
             raise ValueError("values must be of same length")
-        #both elements must be the same length
+            #both elements must be the same length
         for x in range(0,len(binary1)):
             num1 = binary1[x]
             num2 = binary2[x]
@@ -160,10 +178,10 @@ class information():
         return(final)
         
         
-    def _rotate(self,a_list,shift): #tick?
+    def _rotate(self,a_list,shift):
         return a_list[shift:] + a_list[:shift]
 
-    def _matrix(self,content,binary=False): #cannot take binary input (or can it? if decoded twice does it work?)
+    def _matrix(self,content,binary=False): 
         if not binary:
             binary_content = self._text2binary(content)
         else:
@@ -176,13 +194,13 @@ class information():
             matrix.append(chunk)
         return matrix
 
-    def _text2binary(self,string): #tick
+    def _text2binary(self,string):
         string = string.encode()
         value = []
         for byte in string:
             value.append(format(byte,"08b"))
         return(value)
-    def _binary2text(self,plaintext): #tick
+    def _binary2text(self,plaintext):
         letter = ""
         final = ""
         word = []
@@ -196,16 +214,21 @@ class information():
             final += chr(item)
         return final
 
+    def _blocks(self,data):
+        while len(data) % 4 != 0:
+            data += " "
+        information = []
+        for i in range(0,len(data),4):
+            holder = data[i:i+4]
+            information.append(holder)
+        return information
+
 if __name__ == "__main__":
-
-    a = information("this is a pretty cool test")
+    test_string = "this is a test string"
+    a = information(test_string)
     key = a.generate_key()
-    ciphertext = a.encrypt(key)
-    print(f"ciphertext: {ciphertext}")
-    print()
-    plaintext = a.decrypt(key,ciphertext)
-    print(f"decoded = {plaintext}")
-    print(a._binary2text(plaintext))
-
-    
+    a.encrypt(key)
+    print(a)
+    a.decrypt(key)
+    print(a)
 
