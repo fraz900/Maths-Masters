@@ -15,9 +15,10 @@ class connection():
         self.GOAHEAD = "200"
         #files
         self.AUTHCODES = "active_auth_codes.txt"
-        self.REFRESHCODES = "refresh_codes.txt"
+        self.USERACCOUNTS = "user_accounts.txt"
         #commands
         self.REFRESHAUTH = "rac"
+        self.CREATEACCOUNT = "ca"
         
     def start(self)->None:             
         self.s.bind(("",self.PORT))
@@ -38,6 +39,8 @@ class connection():
         match command:
             case self.REFRESHAUTH:
                 threading.Thread(target=self.refresh_token,args=[c]).start()
+            case self.CREATEACCOUNT:
+                threading.Thread(target=self.create_account,args=[c]).start()
             case _:
                 self._send_message(c,self.FAILURE)
                 c.close()
@@ -57,7 +60,7 @@ class connection():
         refresh_code = self._recieve_message(user)
         if not refresh_code:
             return
-        file = open(self.REFRESHCODES,"r")
+        file = open(self.USERACCOUNTS,"r")
         codes = file.read()
         file.close()
         codes = codes.split("\n")
@@ -105,17 +108,20 @@ class connection():
         file.close()
         content = content.split("\n")
         for line in content:
+            allowed = True
             formated_line = line.split(",")
             if "," not in line:
                 content.remove(line)
             try:
                 time_check = formated_line[2]
+                time_check = float(time_check)
             except IndexError:
+                allowed = False
                 None
             current_time = time.time()
-            time_check = float(time_check)
-            if (current_time - time_check) > time_limit:
-                content.remove(line)
+            if allowed:
+                if (current_time - time_check) > time_limit:
+                    content.remove(line)
 
         final = ""
         for line in content:
@@ -125,6 +131,26 @@ class connection():
         file.write(final)
         file.close()
 
+    def create_account(self,user):#NEEDS FINISHING
+        self._send_message(user,self.GOAHEAD)
+        counter = 0 
+        while True:
+            counter += 1
+            username = self._recieve_message(user)
+            password = self._recieve_message(user)
+            self._send_message(user,username)
+            self._send_message(user,password)
+            check = self._recieve_message(user)
+            if check == self.GOAHEAD:
+                break
+            if counter > 3:
+                user.close()
+                return False
+        enter = f"{username},{password}\n"
+        file = open(self.USERACCOUNTS,"a")
+        file.write(enter)
+        file.close()
+            
 if __name__ == "__main__":
     a = connection()
     a.clear_codes("active_auth_codes.txt",3600)
