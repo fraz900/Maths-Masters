@@ -1,6 +1,8 @@
 import secrets
 import sys
-class information():
+import random
+from math import gcd
+class AES():
     def __init__(self,data):
         self.data = data
         self.padding = "00100000"# a space (32)
@@ -223,12 +225,81 @@ class information():
             information.append(holder)
         return information
 
-if __name__ == "__main__":
-    test_string = "this is a test string"
-    a = information(test_string)
-    key = a.generate_key()
-    a.encrypt(key)
-    print(a)
-    a.decrypt(key)
-    print(a)
 
+class DH():
+    def __init__(self):
+        None
+    def generate_prime(self,length):
+        first_primes_list = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29,
+                             31, 37, 41, 43, 47, 53, 59, 61, 67,
+                             71, 73, 79, 83, 89, 97, 101, 103,
+                             107, 109, 113, 127, 131, 137, 139,
+                             149, 151, 157, 163, 167, 173, 179,
+                             181, 191, 193, 197, 199, 211, 223,
+                             227, 229, 233, 239, 241, 251, 257,
+                             263, 269, 271, 277, 281, 283, 293,
+                             307, 311, 313, 317, 331, 337, 347, 349]
+         
+        def nBitRandom(n):
+            return random.randrange(2**(n-1)+1, 2**n - 1)
+         
+        def getLowLevelPrime(n):
+            while True:
+                num = nBitRandom(n)
+                for prime_number in first_primes_list:
+                    if num % prime_number == 0 and prime_number**2 <= num:
+                        break
+                else:
+                    return num
+         
+        def isMillerRabinPassed(num):
+            maxDivisionsByTwo = 0
+            ec = num-1
+            while ec % 2 == 0:
+                ec >>= 1
+                maxDivisionsByTwo += 1
+            if not 2**maxDivisionsByTwo * ec == num-1:
+                raise Exception("not prime")
+            def trialComposite(round_tester):
+                if pow(round_tester, ec, num) == 1:
+                    return False
+                for i in range(maxDivisionsByTwo):
+                    if pow(round_tester, 2**i * ec, num) == num-1:
+                        return False
+                return True
+         
+            numOfTests = 20
+            for i in range(numOfTests):
+                round_tester = random.randrange(2, num)
+                if trialComposite(round_tester):
+                    return False
+            return True
+        while True:
+            num = getLowLevelPrime(length)
+            if isMillerRabinPassed(num):
+                return num
+
+    def equation(self,base,a,modulus):
+        A = (base**a) % modulus
+        return A
+
+    
+if __name__ == "__main__":
+    check = "DH" #or "AES"
+    if check == "AES":
+        test_string = "this is a test string"
+        a = AES(test_string)
+        key = a.generate_key()
+        a.encrypt(key)
+        print(a)
+        a.decrypt(key)
+        print(a)
+    elif check == "DH":
+        a = DH()
+        modulus = a.generate_prime(2048)
+        print(modulus)
+        print()
+        test = a.equation(12345,12345,modulus)
+        print(test)
+        #print(a.prim_root(modulus))
+       
