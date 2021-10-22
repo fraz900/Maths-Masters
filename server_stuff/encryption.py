@@ -19,6 +19,15 @@ class AES():
         fkey = fkey[:128]
         return fkey
 
+    def produce_key(self,data,size=128):
+        data = str(data)
+        binary = self._text2binary(data)
+        final = ""
+        for bina in binary:
+            final += bina
+            if len(final) == size:
+                return final
+        raise Exception("data set too small")
     def encrypt(self,key):
         blocks = self._blocks(self.data)
         final = []
@@ -229,7 +238,7 @@ class AES():
 class DH():
     def __init__(self):
         None
-    def generate_prime(self,length):
+    def generate_prime(self,length=256):
         first_primes_list = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29,
                              31, 37, 41, 43, 47, 53, 59, 61, 67,
                              71, 73, 79, 83, 89, 97, 101, 103,
@@ -279,13 +288,25 @@ class DH():
             if isMillerRabinPassed(num):
                 return num
 
+    def generate_key(self,length=4):
+        final = 0
+        while final == 0:
+            print(final)
+            final = secrets.randbelow(9)
+        final = str(final)
+        for x in range(length):
+            final += str(secrets.randbelow(10))
+        return int(final)
+
+    def generate_base(self,modulus):
+        return int(str(modulus)[:3])
     def equation(self,base,a,modulus):
         A = (base**a) % modulus
         return A
 
     
 if __name__ == "__main__":
-    check = "DH" #or "AES"
+    check = "AES" #or "AES"
     if check == "AES":
         test_string = "this is a test string"
         a = AES(test_string)
@@ -296,10 +317,13 @@ if __name__ == "__main__":
         print(a)
     elif check == "DH":
         a = DH()
-        modulus = a.generate_prime(2048)
+        modulus = a.generate_prime(256)
+        base = a.generate_base(modulus)
+        print(base)
+        key = a.generate_key(6)
         print(modulus)
-        print()
-        test = a.equation(12345,12345,modulus)
+        print(key)
+        test = a.equation(123,key,modulus)
         print(test)
         #print(a.prim_root(modulus))
        
