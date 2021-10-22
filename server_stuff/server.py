@@ -3,7 +3,7 @@ import secrets
 import hashlib
 import time
 import threading
-
+from encryption import DH,AES
 class connection():
     def __init__(self):
         #network things
@@ -11,7 +11,7 @@ class connection():
         self.PORT = 12345
         #codes
         self.FAILURE = "400"
-        self.ERROR = "401"
+        self.AUTHERROR = "401"
         self.GOAHEAD = "200"
         #files
         self.AUTHCODES = "active_auth_codes.txt"
@@ -31,7 +31,19 @@ class connection():
             threading.Thread(target=self.handler,args=[c]).start()
 
     def handler(self,c)->None:
-        self._send_message(c,self.GOAHEAD)
+        self._send_message(c,self.GOAHEAD,setup=True)
+        generating_key = True
+        if generating_key:
+            diffie = DH()
+            modulus = int(self._recieve_message(c,setup=True))
+            base = int(self._recieve_message(c,setup=True))
+            bg = int(self._recieve_message(c,setup=True))
+            dhkey = diffie.generate_key()
+            ag = diffie.equation(base,dhkey,modulus)
+            self._send_message(c,ag,setup=True)
+            a = AES("")
+            self.key = a.produce_key(diffie.equation(bg,dhkey,modulus))
+            #print("final",self.key)
         command = self._recieve_message(c)
         if not command:
             return
@@ -46,12 +58,23 @@ class connection():
                 c.close()
         print(command)
 
-    def _send_message(self,sock,message)->None:
-        sock.sendall(message.encode())
-    def _recieve_message(self,sock)-> str:
+    def _send_message(self,sock,message,setup=False)->None:
+        if setup:
+            sock.sendall(str(message).encode())
+        else:
+            a = AES(message)
+            encrypted_message = a.encrypt(self.key)
+            sock.sendall(encrypted_message.encode())
+    def _recieve_message(self,sock,setup=True)-> str:
         try:
             data = sock.recv(1024)
-            return(data.decode())
+            data = data.decode()
+            if setup:
+                return data
+            else:
+                a = AES(data)
+                message = a.decrypt(self.key)
+                return message
         except ConnectionResetError:
             return False
     
@@ -82,7 +105,7 @@ class connection():
             file.write(addition)
             file.close()
         else:
-            self._send_message(user,self.FAILURE)
+            self._send_message(user,self.AUTHERROR)
             user.close()
 
     def check_auth(self,auth_code):
@@ -146,7 +169,7 @@ class connection():
             if counter > 3:
                 user.close()
                 return False
-        enter = f"{username},{password}\n"
+        enter = f"\n{username},{password}"
         file = open(self.USERACCOUNTS,"a")
         file.write(enter)
         file.close()
