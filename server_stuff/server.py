@@ -18,13 +18,15 @@ class connection():
         #files
         self.AUTHCODES = "active_auth_codes.txt"
         self.USERACCOUNTS = "user_accounts.txt"
+        self.MANIFEST = "manifest.txt"
         #commands
         self.REFRESHAUTH = "rac"
         self.CREATEACCOUNT = "ca"
         self.UPLOADDATA = "ud"
         #other
         self.LARGESIZE = 20000
-    def start(self)->None:             
+    def start(self)->None:
+        print("online")
         self.s.bind(("",self.PORT))
         self.s.listen(5)
         while True:
@@ -125,14 +127,15 @@ class connection():
         file.close()
         content = content.split("\n")
         for line in content:
-            line = line.split(",")
-            check = line[1]
-            if auth_code == check:
-                time_check = line[2]
-                current_time = time.time()
-                time_check = float(time_check)
-                if (current_time - time_check) < 3600:
-                    return line[0]
+            if line != "":
+                line = line.split(",")
+                check = line[1]
+                if auth_code == check:
+                    time_check = line[2]
+                    current_time = time.time()
+                    time_check = float(time_check)
+                    if (current_time - time_check) < 3600:
+                        return line[0]
                 
         return False
     def clear_codes(self,file_name,time_limit):
@@ -175,11 +178,10 @@ class connection():
         self._send_message(user,self.GOAHEAD)
         size = int(self._recieve_message(user))
         self._send_message(user,self.GOAHEAD)
-        size *= 50 #please fix this, it works but cmon
         print("size",size)
         data = self._recieve_message(user,size=size)
-        os.chdir("data")
-        os.chdir(username)
+        os.chdir("data")#consider using relative path instead of this awfullness
+        os.chdir(username)#although because of the miracle that is threading this could work
         files = os.listdir()
 
         while True:
@@ -192,8 +194,20 @@ class connection():
         self._send_message(user,self.GOAHEAD)
         self._recieve_message(user)
         self._send_message(user,name)
+        current_time = time.time()
+        file = open(self.MANIFEST,"a")
+        entry = f"{name},{current_time}\n"
+        file.write(entry)
+        file.close()
         return True
-        
+
+    def monitor_auth(self,timer,seperate=False):
+        if not seperate:
+            threading.Thread(target=self.monitor_auth,args=[timer,True]).start()
+            return
+        while True:
+            self.clear_codes(self.AUTHCODES,timer)
+            time.sleep(600)
         
     def create_account(self,user):
         self._send_message(user,self.GOAHEAD)
@@ -227,10 +241,13 @@ class connection():
         file.close()
         os.chdir("data")
         os.mkdir(username)
+        os.chdir(username)
+        file = open(self.MANIFEST,"w")
+        file.close()
         return True
             
 if __name__ == "__main__":
     a = connection()
-    a.clear_codes("active_auth_codes.txt",3600)
+    a.monitor_auth(3600)
     a.start()
 
