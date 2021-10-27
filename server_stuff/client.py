@@ -142,7 +142,7 @@ class connection():
             self._error_handling(data)
 
             
-    def upload(self,data_to_send,name,recurse=False):#NOT DONE
+    def upload(self,data_to_send,name,recurse=False):
         if self.AUTHCODE == None:
             self.get_auth_token()
 
@@ -166,7 +166,11 @@ class connection():
                 self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.AUTHCODE = None
                 self.upload(data,name,recurse=True)
-        size = self._size(data_to_send)
+        a = AES(data_to_send)
+        new_data = a.encrypt(self.key)
+        size = self._size(new_data)
+        size *= 1.2
+        size = int(size)
         self._send_message(self.s,size)
         self._recieve_message()
         self._send_message(self.s,data_to_send)
