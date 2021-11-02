@@ -23,8 +23,10 @@ class connection():
         self.REFRESHAUTH = "rac"
         self.CREATEACCOUNT = "ca"
         self.UPLOADDATA = "ud"
+        self.CHECKAUTH_COMMAND = "cac"
         #other
         self.LARGESIZE = 20000
+        self.KEYTIMEOUT = 3600 #seconds, one hour
     def start(self)->None:
         print("online")
         self.s.bind(("",self.PORT))
@@ -51,6 +53,7 @@ class connection():
             self._send_message(c,ag,setup=True)
             a = AES("")
             self.key = a.produce_key(diffie.equation(bg,dhkey,modulus))
+            print(self.key)
         command = self._recieve_message(c)
         if not command:
             return
@@ -62,6 +65,8 @@ class connection():
                 self.create_account(c)
             case self.UPLOADDATA:
                 self.upload_data(c)
+            case self.CHECKAUTH_COMMAND:
+                self.checking(c)
             case _:
                 print("command",command)
                 self._send_message(c,self.FAILURE)
@@ -134,7 +139,7 @@ class connection():
                     time_check = line[2]
                     current_time = time.time()
                     time_check = float(time_check)
-                    if (current_time - time_check) < 3600:
+                    if (current_time - time_check) < self.KEYTIMEOUT:
                         return line[0]
                 
         return False
@@ -208,6 +213,15 @@ class connection():
         while True:
             self.clear_codes(self.AUTHCODES,timer)
             time.sleep(600)
+
+    def checking(self,user):
+        self._send_message(user,self.GOAHEAD)
+        code = self._recieve_message(user,size=self.LARGESIZE)
+        if self.check_auth(code):
+            self._send_message(user,self.GOAHEAD)
+            return
+        self._send_message(user,self.AUTHERROR)
+        user.close()
         
     def create_account(self,user):
         self._send_message(user,self.GOAHEAD)
