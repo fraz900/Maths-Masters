@@ -1,6 +1,9 @@
 import socket
 import hashlib
+import time
+
 from encryption import DH,AES
+
 class connection():
     def __init__(self):
         #network things
@@ -11,6 +14,7 @@ class connection():
         self.REFRESHAUTH_COMMAND = "rac"
         self.CREATEACCOUNT = "ca"
         self.UPLOADDATA = "ud"
+        self.CHECKAUTH_COMMAND = "cac"
         #responses
         self.GOAHEAD = "200"
         self.WARNINGS = {"400":"client error, incorrect command","401":"authentication error, failure to authenticate","500":"Data not allowed"}
@@ -26,7 +30,7 @@ class connection():
         except:
             self.REFRESH_CODE = None
             self.USER_NAME = None
-
+        self.KEYTIMEOUT = 3600 #seconds, one hour
         self.AUTHCODE = None
         self.LARGESIZE = 20000
         self.UPLOADS = "uploads.txt"
@@ -88,9 +92,32 @@ class connection():
             a = AES("")
             self.key = a.produce_key(final)
     def get_auth_token(self):
+        current_time = time.time()
+        try:
+            file = open("code.txt","r")
+            content = file.read()
+            file.close()
+            content = content.split(",")
+            check_time = float(content[0])
+            if (current_time-check_time) < self.KEYTIMEOUT:
+                self.AUTHCODE = content[1]
+                self._initiate_connection()
+                self._send_message(self.s,self.CHECKAUTH_COMMAND)
+                data = self._recieve_message()
+                data = data.strip()
+                if data != self.GOAHEAD:
+                    self._error_handling(data)
+                    return False
+                self._send_message(self.s,self.AUTHCODE)
+                data = self._recieve_message()
+                self.s.close()
+                if data.strip() == self.GOAHEAD:
+                    return True
+        except:
+            None
+                    
         commands = [self.REFRESHAUTH_COMMAND,self.REFRESH_CODE]
         self._initiate_connection()
-        first = True
         self._send_message(self.s,self.REFRESHAUTH_COMMAND)
         data = self._recieve_message()
         data = data.strip()
@@ -105,6 +132,10 @@ class connection():
             self._error_handling(data)
         except KeyError:
             self.AUTHCODE = data
+            file = open("code.txt","w")
+            entry = f"{current_time},{data}"
+            file.write(entry)
+            file.close()
             self.s.close()
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             return True
@@ -200,12 +231,11 @@ class communication():
         None
 if __name__ == "__main__":      
     c = connection()
-    #a = c.get_auth_token()
-    #print(a)
+    a = c.get_auth_token()
+    print(a)
     #c.create_account("Fraz900","admin")
-    c.upload("this is a test","testing")
+    #c.upload("this is a test","testing")
 
 #TODO
-#data uploading keeping scope in mind
 #limitted storage of auth codes to stop avoidable traffic
 
