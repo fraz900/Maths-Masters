@@ -96,7 +96,7 @@ class AES():
                 concat += element
 
         result = self._xor(concat,key)
-        if count > 3:
+        if count > 9:
             return result
         count += 1
         matrix = []
@@ -158,7 +158,7 @@ class AES():
                 for element in row:
                     concat += element
             final += concat
-        if counter > 3:
+        if counter > 9:
             return final
         counter += 1
         result = self._decryptor(key,final,counter)
