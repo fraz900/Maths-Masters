@@ -14,10 +14,13 @@ class connection():
         self.REFRESHAUTH_COMMAND = "rac"
         self.CREATEACCOUNT = "ca"
         self.UPLOADDATA = "ud"
+        self.UPDATEDATA = "upd"
+        self.DELETEDATA = "dd"
+        self.VIEWDATA = "vd"
         self.CHECKAUTH_COMMAND = "cac"
         #responses
         self.GOAHEAD = "200"
-        self.WARNINGS = {"400":"client error, incorrect command","401":"authentication error, failure to authenticate","500":"Data not allowed"}
+        self.WARNINGS = {"400":"client error, incorrect command","401":"authentication error, failure to authenticate","404":"resource not found","500":"Data not allowed"}
 
         #other
         try:
@@ -69,6 +72,7 @@ class connection():
     def _size(self,s)->int:
         return len(s.encode('utf-8'))
     def _initiate_connection(self):
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect((self.SERVER_IP,self.PORT))
         data = self._recieve_message(setup=True)
         if data != self.GOAHEAD:
@@ -172,7 +176,28 @@ class connection():
         else:
             self._error_handling(data)
 
-            
+    def authenticated_start(self):
+        if self.AUTHCODE == None:
+            self.get_auth_token()
+        auth = self.AUTHCODE
+        
+        self._initiate_connection()
+        self._send_message(self.s,self.CHECKAUTH_COMMAND)
+        data = self._recieve_message()
+        data = data.strip()
+        if data != self.GOAHEAD:
+            self._error_handling(data)
+            return False
+        self._send_message(self.s,auth)
+        data = self._recieve_message()
+        self.s.close()
+        if data.strip() == self.GOAHEAD:
+            return auth
+        else:
+            self.get_auth_token()
+            auth = self.AUTHCODE
+            return auth
+    
     def upload(self,data_to_send,name,recurse=False):
         if self.AUTHCODE == None:
             self.get_auth_token()
@@ -215,7 +240,67 @@ class connection():
         entry = f"\n{name},{namer}"
         file.write(entry)
         file.close()
+        return namer
+
+    def update(self,filename,new):
+        auth = self.authenticated_start()
+
+        self._initiate_connection()
+        self._send_message(self.s,self.UPDATEDATA)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,auth)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        
+        self._send_message(self.s,filename)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,new)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self.s.close()
         return True
+        
+    def delete(self,filename):
+        auth = self.authenticated_start()
+
+        self._initiate_connection()
+        self._send_message(self.s,self.DELETEDATA)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,auth)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        
+        self._send_message(self.s,filename)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self.s.close()
+        file = open(self.UPLOADS,"r")
+        content = file.read()
+        file.close()
+        new = []
+        content = content.split("\n")
+        for line in content:
+            if filename not in line:
+                new.append(line)
+        final = ""
+        for line in new:
+            final += line + "\n"
+        file = open(self.UPLOADS,"w")
+        file.write(final)
+        file.close()
+        return True
+    def view(self,filename):
+        None
         
 class communication():
     def __init__(self):
@@ -231,8 +316,10 @@ class communication():
         None
 if __name__ == "__main__":      
     c = connection()
-    a = c.get_auth_token()
-    print(a)
+    #a = c.get_auth_token()
+    #name = c.upload("this do be a test","testing")
+    c.delete("bae97d0927502e6604d719ec3e75a262")
+    #print(a)
     #c.create_account("Fraz900","admin")
     #c.upload("this is a test","testing")
 
