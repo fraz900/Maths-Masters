@@ -4,6 +4,7 @@ import hashlib
 import time
 import threading
 import os
+import sys
 from encryption import DH,AES
 class connection():
     def __init__(self):
@@ -13,6 +14,7 @@ class connection():
         #codes
         self.FAILURE = "400"
         self.AUTHERROR = "401"
+        self.NOTFOUND = "404"
         self.NOTALLOWED = "500"
         self.GOAHEAD = "200"
         #files
@@ -23,12 +25,16 @@ class connection():
         self.REFRESHAUTH = "rac"
         self.CREATEACCOUNT = "ca"
         self.UPLOADDATA = "ud"
+        self.UPDATEDATA = "upd"
+        self.DELETEDATA = "dd"
+        self.VIEWDATA = "vd"
         self.CHECKAUTH_COMMAND = "cac"
         #other
         self.LARGESIZE = 20000
         self.KEYTIMEOUT = 3600 #seconds, one hour
     def start(self)->None:
         print("online")
+        self.s = socket.socket()
         self.s.bind(("",self.PORT))
         self.s.listen(5)
         while True:
@@ -39,6 +45,7 @@ class connection():
             threading.Thread(target=self.handler,args=[c]).start()
 
     def handler(self,c)->None:
+        os.chdir(os.path.split(__file__)[0])
         self._send_message(c,self.GOAHEAD,setup=True)
         generating_key = True
         if generating_key:
@@ -66,7 +73,13 @@ class connection():
             case self.UPLOADDATA:
                 self.upload_data(c)
             case self.CHECKAUTH_COMMAND:
-                self.checking(c)
+                self.user_auth_checking(c)
+            case self.UPDATEDATA:
+                self.update(c)
+            case self.DELETEDATA:
+                self.delete(c)
+            case self.VIEWDATA:
+                self.view(c)
             case _:
                 print("command",command)
                 self._send_message(c,self.FAILURE)
@@ -94,6 +107,7 @@ class connection():
                 print("recieved :",message)
                 return message.strip()
         except ConnectionResetError:
+            sys.exit()
             return False
     
     def refresh_token(self,user):
@@ -172,21 +186,28 @@ class connection():
         file.write(final)
         file.close()
 
-    def upload_data(self,user):
+    def _authenticate(self,user):
         self._send_message(user,self.GOAHEAD)
-
         auth = self._recieve_message(user,size=self.LARGESIZE)
         username = self.check_auth(auth)
         if not username:
             self._send_message(user,self.AUTHERROR)
-            return
+            return False
         self._send_message(user,self.GOAHEAD)
+        return username
+    
+    def upload_data(self,user):
+        username = self._authenticate(user)
+        if not username:
+            user.close()
+            return False
+        #self._send_message(user,self.GOAHEAD)
         size = int(self._recieve_message(user))
         self._send_message(user,self.GOAHEAD)
         print("size",size)
         data = self._recieve_message(user,size=size)
-        os.chdir("data")#consider using relative path instead of this awfullness
-        os.chdir(username)#although because of the miracle that is threading this could work
+        os.chdir("data")
+        os.chdir(username)
         files = os.listdir()
 
         while True:
@@ -214,7 +235,7 @@ class connection():
             self.clear_codes(self.AUTHCODES,timer)
             time.sleep(600)
 
-    def checking(self,user):
+    def user_auth_checking(self,user):
         self._send_message(user,self.GOAHEAD)
         code = self._recieve_message(user,size=self.LARGESIZE)
         if self.check_auth(code):
@@ -222,6 +243,66 @@ class connection():
             return
         self._send_message(user,self.AUTHERROR)
         user.close()
+
+    def update(self,user):
+        username = self._authenticate(user)
+        if not username:
+            user.close()
+            return False
+        filename = self._recieve_message(user,size=self.LARGESIZE)
+        os.chdir("data")
+        os.chdir(username)
+        file = open(self.MANIFEST,"r")
+        content = file.read()
+        file.close()
+        if filename not in content:
+            self._send_message(user,self.NOTFOUND)
+            user.close()
+            return False
+        self._send_message(user,self.GOAHEAD)
+        change = self._recieve_message(user)
+        file = open(filename,"w")
+        file.write(change)
+        file.close()
+        self._send_message(user,self.GOAHEAD)
+        user.close()
+                
+
+    def delete(self,user):
+        username = self._authenticate(user)
+        if not username:
+            user.close()
+            return False
+        filename = self._recieve_message(user,size=self.LARGESIZE)
+        os.chdir("data")
+        os.chdir(username)
+        file = open(self.MANIFEST,"r")
+        content = file.read()
+        file.close()
+        if filename not in content:
+            self._send_message(user,self.NOTFOUND)
+            user.close()
+            return False
+        os.remove(filename)
+        self._send_message(user,self.GOAHEAD)
+        user.close()
+        file = open(self.MANIFEST,"r")
+        content = file.read()
+        file.close()
+        new = []
+        content = content.split("\n")
+        for line in content:
+            if filename not in line:
+                new.append(line)
+        final = ""
+        for line in new:
+            final += line + "\n"
+        file = open(self.MANIFEST,"w")
+        file.write(final)
+        file.close()
+        return True
+    def view(self,user):
+        None
         
     def create_account(self,user):
         self._send_message(user,self.GOAHEAD)
