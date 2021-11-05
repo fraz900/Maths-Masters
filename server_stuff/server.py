@@ -302,7 +302,25 @@ class connection():
         file.close()
         return True
     def view(self,user):
-        None
+        username = self._authenticate(user)
+        if not username:
+            user.close()
+            return False
+        filename = self._recieve_message(user,size=self.LARGESIZE)
+        os.chdir("data")
+        os.chdir(username)
+        file = open(self.MANIFEST,"r")
+        content = file.read()
+        file.close()
+        if filename not in content:
+            self._send_message(user,self.NOTFOUND)
+            user.close()
+            return False
+        file = open(filename,"r")
+        content = file.read()
+        file.close()
+        self._send_message(user,content)
+        user.close()
         
     def create_account(self,user):
         self._send_message(user,self.GOAHEAD)
