@@ -5,11 +5,11 @@ import time
 from encryption import DH,AES
 
 class connection():
-    def __init__(self):
+    def __init__(self,IP="127.0.0.1",PORT=12345):
         #network things
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.SERVER_IP = "127.0.0.1"
-        self.PORT = 12345
+        self.SERVER_IP = IP
+        self.PORT = PORT
         #commands
         self.REFRESHAUTH_COMMAND = "rac"
         self.CREATEACCOUNT = "ca"
@@ -300,8 +300,27 @@ class connection():
         file.close()
         return True
     def view(self,filename):
-        None
+        auth = self.authenticated_start()
+        self._initiate_connection()
+        self._send_message(self.s,self.VIEWDATA)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,auth)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
         
+        self._send_message(self.s,filename)
+        data = self._recieve_message(size=self.LARGESIZE)
+        try:
+            self.WARNINGS[data]
+            self._error_handling(data)
+            return
+        except KeyError:
+            None
+        self.s.close()
+        return data
 class communication():
     def __init__(self):
         None
@@ -317,12 +336,12 @@ class communication():
 if __name__ == "__main__":      
     c = connection()
     #a = c.get_auth_token()
-    #name = c.upload("this do be a test","testing")
-    c.delete("bae97d0927502e6604d719ec3e75a262")
+    name = c.upload("this do be a test 2699","testing")
+    time.sleep(1)
+    print(c.view(name))
+    time.sleep(1)
+    c.delete(name)
     #print(a)
     #c.create_account("Fraz900","admin")
     #c.upload("this is a test","testing")
-
-#TODO
-#limitted storage of auth codes to stop avoidable traffic
 
