@@ -17,6 +17,7 @@ class connection():
         self.UPDATEDATA = "upd"
         self.DELETEDATA = "dd"
         self.VIEWDATA = "vd"
+        self.SHARE = "sd"
         self.CHECKAUTH_COMMAND = "cac"
         #responses
         self.GOAHEAD = "200"
@@ -198,7 +199,10 @@ class connection():
             auth = self.AUTHCODE
             return auth
     
-    def upload(self,data_to_send,name,recurse=False):
+    def upload(self,data_to_send,name,shared=False,recurse=False):
+        shared_state = "singular"
+        if shared:
+            shared_state = "shared"
         if self.AUTHCODE == None:
             self.get_auth_token()
 
@@ -222,6 +226,8 @@ class connection():
                 self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.AUTHCODE = None
                 self.upload(data,name,recurse=True)
+        self._send_message(self.s,shared_state)
+        self._recieve_message()
         a = AES(data_to_send)
         new_data = a.encrypt(self.key)
         size = self._size(new_data)
@@ -321,6 +327,8 @@ class connection():
             None
         self.s.close()
         return data
+    def share(self,filename):
+        None
 class communication():
     def __init__(self):
         None
@@ -336,7 +344,7 @@ class communication():
 if __name__ == "__main__":      
     c = connection()
     #a = c.get_auth_token()
-    name = c.upload("this do be a test 2699","testing")
+    name = c.upload("this do be a test 2699","testing",shared=True)
     time.sleep(1)
     print(c.view(name))
     time.sleep(1)
