@@ -28,6 +28,7 @@ class connection():
         self.UPDATEDATA = "upd"
         self.DELETEDATA = "dd"
         self.VIEWDATA = "vd"
+        self.SHARE = "sd"
         self.CHECKAUTH_COMMAND = "cac"
         #other
         self.LARGESIZE = 20000
@@ -80,6 +81,8 @@ class connection():
                 self.delete(c)
             case self.VIEWDATA:
                 self.view(c)
+            case self.SHARE:
+                self.share(c)
             case _:
                 print("command",command)
                 self._send_message(c,self.FAILURE)
@@ -196,33 +199,55 @@ class connection():
         self._send_message(user,self.GOAHEAD)
         return username
     
-    def upload_data(self,user):
+    def upload_data(self,user):#tick
         username = self._authenticate(user)
         if not username:
             user.close()
             return False
-        #self._send_message(user,self.GOAHEAD)
+        shared_state = self._recieve_message(user)
+        shared = False
+        if shared_state == "shared":
+            shared = True
+        self._send_message(user,self.GOAHEAD)
         size = int(self._recieve_message(user))
         self._send_message(user,self.GOAHEAD)
-        print("size",size)
+        
         data = self._recieve_message(user,size=size)
         os.chdir("data")
-        os.chdir(username)
-        files = os.listdir()
+        if not shared:
+            os.chdir(username)
+            files = os.listdir()
 
-        while True:
-            name = secrets.token_hex(16)
-            if name not in files:
-                break
-        file = open(name,"w")
-        file.write(data)
-        file.close()
+            while True:
+                name = secrets.token_hex(16)
+                if name not in files:
+                    break
+            file = open(name,"w")
+            file.write(data)
+            file.close()
+        else:
+            os.chdir("shared")
+            files = os.listdir()
+            while True:
+                name = secrets.token_hex(16)
+                if name not in files:
+                    break
+            file = open(name,"w")
+            file.write(data)
+            file.close()
+            namer = f"{name} ownership"
+            file = open(namer,"w")
+            file.write(username)
+            file.close()
+        os.chdir(os.path.split(__file__)[0])
+        os.chdir("data")
+        os.chdir(username)
         self._send_message(user,self.GOAHEAD)
         self._recieve_message(user)
         self._send_message(user,name)
         current_time = time.time()
         file = open(self.MANIFEST,"a")
-        entry = f"{name},{current_time}\n"
+        entry = f"{name},{current_time},{shared_state}\n"
         file.write(entry)
         file.close()
         return True
@@ -244,7 +269,7 @@ class connection():
         self._send_message(user,self.AUTHERROR)
         user.close()
 
-    def update(self,user):
+    def update(self,user):#tick
         username = self._authenticate(user)
         if not username:
             user.close()
@@ -261,14 +286,27 @@ class connection():
             return False
         self._send_message(user,self.GOAHEAD)
         change = self._recieve_message(user)
-        file = open(filename,"w")
+        content = content.split("\n")
+        for line in content:
+            if filename in line:
+                line = line.split(",")
+                shared_check = line[2]
+                shared = False
+                if shared_check == "shared":
+                    shared = True
+
+        if shared:
+            os.chdir(os.path.split(__file__)[0])
+            os.chdir("data")
+            os.chdir("shared")
+        file = open(filename,"w")#if two users try to update at same time?
         file.write(change)
         file.close()
         self._send_message(user,self.GOAHEAD)
         user.close()
                 
 
-    def delete(self,user):
+    def delete(self,user):#tick
         username = self._authenticate(user)
         if not username:
             user.close()
@@ -283,7 +321,37 @@ class connection():
             self._send_message(user,self.NOTFOUND)
             user.close()
             return False
-        os.remove(filename)
+        content = content.split("\n")
+        done = False
+        for line in content:
+            line = line.split(",")
+            if line[0] == filename:
+                if line[2] == "shared":
+                    done = True
+                    os.chdir(os.path.split(__file__)[0])
+                    os.chdir("data")
+                    os.chdir("shared")
+                    namer = f"{filename} ownership"
+                    file = open(namer,"r")
+                    stuff = file.read()
+                    file.close()
+                    final = ""
+                    stuff = stuff.split("\n")
+                    for sline in stuff:
+                        if sline != username:
+                            final += sline + "\n"
+                    if final == "":
+                        os.remove(filename)
+                        os.remove(namer)
+                    else:
+                        file = open(namer,"w")
+                        file.write(final)
+                        file.close()
+        os.chdir(os.path.split(__file__)[0])
+        os.chdir("data")
+        os.chdir(username)
+        if not done:
+            os.remove(filename)
         self._send_message(user,self.GOAHEAD)
         user.close()
         file = open(self.MANIFEST,"r")
@@ -301,7 +369,7 @@ class connection():
         file.write(final)
         file.close()
         return True
-    def view(self,user):
+    def view(self,user):#tick
         username = self._authenticate(user)
         if not username:
             user.close()
@@ -316,11 +384,28 @@ class connection():
             self._send_message(user,self.NOTFOUND)
             user.close()
             return False
-        file = open(filename,"r")
+
+        content = content.split("\n")
+        for line in content:
+            if filename in line:
+                line = line.split(",")
+                shared_check = line[2]
+                shared = False
+                if shared_check == "shared":
+                    shared = True
+
+        if shared:
+            os.chdir(os.path.split(__file__)[0])
+            os.chdir("data")
+            os.chdir("shared")
+        file = open(filename,"r")#what if two users try and view at the same time?
         content = file.read()
         file.close()
         self._send_message(user,content)
         user.close()
+
+    def share(self,user):
+        None
         
     def create_account(self,user):
         self._send_message(user,self.GOAHEAD)
