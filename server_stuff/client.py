@@ -19,9 +19,10 @@ class connection():
         self.VIEWDATA = "vd"
         self.SHARE = "sd"
         self.CHECKAUTH_COMMAND = "cac"
+        self.GETOWNERSHIP = "go"
         #responses
         self.GOAHEAD = "200"
-        self.WARNINGS = {"400":"client error, incorrect command","401":"authentication error, failure to authenticate","404":"resource not found","500":"Data not allowed"}
+        self.WARNINGS = {"400":"client error, incorrect command","401":"authentication error, failure to authenticate","404":"resource not found","500":"Data not allowed","501":"invalid resource"}
 
         #other
         try:
@@ -327,26 +328,58 @@ class connection():
             None
         self.s.close()
         return data
-    def share(self,filename):
-        None
-class communication():
-    def __init__(self):
-        None
+    def share(self,filename,user_to_share):
+        auth = self.authenticated_start()
+        self._initiate_connection()
+        self._send_message(self.s,self.SHARE)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,auth)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,user_to_share)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,filename)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        return True
 
-    def upload(self,data):
-        None
-
-    def update(self,change,name):
-        None
-
-    def delete(self,name):
-        None
+    def get_ownership(self,filename):
+        auth = self.authenticated_start()
+        self._initiate_connection()
+        self._send_message(self.s,self.GETOWNERSHIP)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,auth)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,filename)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,self.GOAHEAD)
+        size = int(self._recieve_message())
+        self._send_message(self.s,self.GOAHEAD)
+        content = self._recieve_message(size=size)
+        return content
+        
 if __name__ == "__main__":      
     c = connection()
     #a = c.get_auth_token()
-    name = c.upload("this do be a test 2699","testing",shared=True)
+    name = c.upload("this do be a test 2699","testing234",shared=False)
     time.sleep(1)
     print(c.view(name))
+    time.sleep(1)
+    c.share(name,"test")
+    time.sleep(1)
+    print(c.get_ownership(name))
     time.sleep(1)
     c.delete(name)
     #print(a)
