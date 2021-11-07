@@ -17,6 +17,7 @@ class connection():
         self.NOTFOUND = "404"
         self.NOTALLOWED = "500"
         self.GOAHEAD = "200"
+        self.INVALID = "501"
         #files
         self.AUTHCODES = "active_auth_codes.txt"
         self.USERACCOUNTS = "user_accounts.txt"
@@ -30,6 +31,7 @@ class connection():
         self.VIEWDATA = "vd"
         self.SHARE = "sd"
         self.CHECKAUTH_COMMAND = "cac"
+        self.GETOWNERSHIP = "go"
         #other
         self.LARGESIZE = 20000
         self.KEYTIMEOUT = 3600 #seconds, one hour
@@ -43,9 +45,9 @@ class connection():
             
             print("got connection from",addr)
             
-            threading.Thread(target=self.handler,args=[c]).start()
+            threading.Thread(target=self.handler,args=[c,addr]).start()
 
-    def handler(self,c)->None:
+    def handler(self,c,ip)->None:
         os.chdir(os.path.split(__file__)[0])
         self._send_message(c,self.GOAHEAD,setup=True)
         generating_key = True
@@ -83,13 +85,22 @@ class connection():
                 self.view(c)
             case self.SHARE:
                 self.share(c)
+            case self.GETOWNERSHIP:
+                self.get_ownership(c)
             case _:
                 print("command",command)
                 self._send_message(c,self.FAILURE)
                 c.close()
+        current_time = time.time()
+        os.chdir(os.path.split(__file__)[0])
+        entry = f"{ip},{command},{current_time}\n"
+        file = open("log.txt","a")
+        file.write(entry)
+        file.close()
         print(command)
 
     def _send_message(self,sock,message,setup=False)->None:
+        message = str(message)
         if setup:
             sock.sendall(str(message).encode())
         else:
@@ -199,7 +210,7 @@ class connection():
         self._send_message(user,self.GOAHEAD)
         return username
     
-    def upload_data(self,user):#tick
+    def upload_data(self,user):
         username = self._authenticate(user)
         if not username:
             user.close()
@@ -237,7 +248,8 @@ class connection():
             file.close()
             namer = f"{name} ownership"
             file = open(namer,"w")
-            file.write(username)
+            entry = f"{username}\n"
+            file.write(entry)
             file.close()
         os.chdir(os.path.split(__file__)[0])
         os.chdir("data")
@@ -269,7 +281,7 @@ class connection():
         self._send_message(user,self.AUTHERROR)
         user.close()
 
-    def update(self,user):#tick
+    def update(self,user):
         username = self._authenticate(user)
         if not username:
             user.close()
@@ -306,7 +318,7 @@ class connection():
         user.close()
                 
 
-    def delete(self,user):#tick
+    def delete(self,user):
         username = self._authenticate(user)
         if not username:
             user.close()
@@ -369,7 +381,7 @@ class connection():
         file.write(final)
         file.close()
         return True
-    def view(self,user):#tick
+    def view(self,user):
         username = self._authenticate(user)
         if not username:
             user.close()
@@ -405,7 +417,89 @@ class connection():
         user.close()
 
     def share(self,user):
-        None
+        username = self._authenticate(user)
+        if not username:
+            user.close()
+            return False
+        user_to_share = self._recieve_message(user,size=self.LARGESIZE)
+        file = open(self.USERACCOUNTS,"r")
+        content = file.read()
+        content = content.split("\n")
+        found = False
+        for line in content:
+            check = line.split(",")
+            if check[0] == user_to_share:
+                found = True
+        if not found:
+            self._send_message(user,self.NOTFOUND)
+            user.close()
+            return False
+        self._send_message(user,self.GOAHEAD)
+        filename = self._recieve_message(user,size=self.LARGESIZE)
+        os.chdir("data")
+        os.chdir(username)
+        file = open(self.MANIFEST,"r")
+        content = file.read()
+        file.close()
+        content = content.split("\n")
+        final = ""
+        found = False
+        x = 0
+        for line in content:
+            split_line = line.split(",")
+            if split_line[0] == filename:
+                found = True
+                if split_line[2] == "singular":
+                    split_line[2] = "shared"
+                    new = ",".join(split_line)
+                    content[x]  = new
+                    file = open(filename,"r")
+                    stuff = file.read()
+                    file.close()
+                    os.remove(filename)
+                    os.chdir(os.path.split(__file__)[0])
+                    os.chdir("data")
+                    os.chdir("shared")
+                    file = open(filename,"w")
+                    file.write(stuff)
+                    file.close()
+                    namer = f"{filename} ownership"
+                    file = open(namer,"w")
+                    entry = f"{username}\n{user_to_share}\n"
+                    file.write(entry)
+                    file.close()
+                else:
+                    os.chdir(os.path.split(__file__)[0])
+                    os.chdir("data")
+                    os.chdir("shared")
+                    entry = f"{user_to_share}\n"
+                    fname = f"{filename} ownership"
+                    file = open(fname,"a")
+                    file.write(entry)
+                    file.close()
+            x += 1
+        if not found:
+            self._send_message(user,self.NOTFOUND)
+            user.close()
+            return False
+        os.chdir(os.path.split(__file__)[0])
+        os.chdir("data")
+        os.chdir(username)
+        entry = "\n".join(content)
+        file = open(self.MANIFEST,"w")
+        file.write(entry)
+        file.close()
+        os.chdir(os.path.split(__file__)[0])
+        os.chdir("data")
+        os.chdir(user_to_share)
+        current_time = time.time()
+        file = open(self.MANIFEST,"a")
+        entry = f"{filename},{current_time},shared\n"
+        file.write(entry)
+        file.close()
+        self._send_message(user,self.GOAHEAD)
+        user.close()
+        return True
         
     def create_account(self,user):
         self._send_message(user,self.GOAHEAD)
@@ -443,6 +537,54 @@ class connection():
         file = open(self.MANIFEST,"w")
         file.close()
         return True
+    def get_ownership(self,user):
+        username = self._authenticate(user)
+        if not username:
+            user.close()
+            return False
+        filename = self._recieve_message(user,size=self.LARGESIZE)
+        os.chdir("data")
+        os.chdir(username)
+        file = open(self.MANIFEST,"r")
+        content = file.read()
+        content = content.split("\n")
+        found = False
+        for line in content:
+            split_line = line.split(",")
+            if split_line[0] == filename:
+                found = True
+                if split_line[2] != "shared":
+                    self._send_message(user,self.INVALID)
+                    user.close()
+                    return False
+        if not found:
+            self._send_message(user,self.NOTFOUND)
+            user.close()
+            return False
+        new_name = f"{filename} ownership"
+        os.chdir(os.path.split(__file__)[0])
+        os.chdir("data")
+        os.chdir("shared")
+        file = open(new_name,"r")
+        stuff = file.read()
+        file.close()
+        a = AES(stuff)
+        new_data = a.encrypt(self.key)
+        size = self._size(new_data)
+        size *= 1.2
+        size = int(size)
+
+        self._send_message(user,self.GOAHEAD)
+        self._recieve_message(user)
+        self._send_message(user,size)
+        self._recieve_message(user)
+        self._send_message(user,stuff)
+        user.close()
+        return True
+
+    def _size(self,s)->int:
+        return len(s.encode('utf-8')) 
+        
             
 if __name__ == "__main__":
     a = connection()
