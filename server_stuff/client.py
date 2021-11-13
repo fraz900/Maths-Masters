@@ -1,9 +1,10 @@
 import socket
 import hashlib
 import time
-
-from encryption import DH,AES
-
+try:
+    from online.encryption import DH,AES
+except:
+    from encryption import DH,AES
 class connection():
     def __init__(self,IP="127.0.0.1",PORT=12345):
         #network things
@@ -18,6 +19,7 @@ class connection():
         self.DELETEDATA = "dd"
         self.VIEWDATA = "vd"
         self.SHARE = "sd"
+        self.CHECKLOGIN = "cl"
         self.CHECKAUTH_COMMAND = "cac"
         self.GETOWNERSHIP = "go"
         #responses
@@ -248,7 +250,27 @@ class connection():
         file.write(entry)
         file.close()
         return namer
-
+    def login(self,username,password):
+        hasher = hashlib.sha256()
+        hasher.update(password.encode())
+        password = hasher.hexdigest()
+        self._initiate_connection()
+        self._send_message(self.s,self.CHECKLOGIN)
+        data = self._recieve_message()
+        if data != self.GOAHEAD:
+            self._error_handling(data)
+            return False
+        self._send_message(self.s,username)
+        data = self._recieve_message()
+        if data != self.GOAHEAD:
+            self._error_handling(data)
+            return False
+        self._send_message(self.s,password)
+        data = self._recieve_message()
+        if data != self.GOAHEAD:
+            self._error_handling(data)
+            return False
+        return True
     def update(self,filename,new):
         auth = self.authenticated_start()
 
