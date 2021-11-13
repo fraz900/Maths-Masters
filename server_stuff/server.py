@@ -30,6 +30,7 @@ class connection():
         self.DELETEDATA = "dd"
         self.VIEWDATA = "vd"
         self.SHARE = "sd"
+        self.CHECKLOGIN = "cl"
         self.CHECKAUTH_COMMAND = "cac"
         self.GETOWNERSHIP = "go"
         #other
@@ -87,6 +88,8 @@ class connection():
                 self.share(c)
             case self.GETOWNERSHIP:
                 self.get_ownership(c)
+            case self.CHECKLOGIN:
+                self.login(c)
             case _:
                 print("command",command)
                 self._send_message(c,self.FAILURE)
@@ -415,7 +418,31 @@ class connection():
         file.close()
         self._send_message(user,content)
         user.close()
-
+    def login(self,user):
+        self._send_message(user,self,GOAHEAD)
+        username = self._recieve_message(user)
+        file = open(USERACCOUNTS,"r")
+        content = file.read()
+        content = content.split("\n")
+        found = False
+        for line in content:
+            check = line.split(",")
+            if check[0] == user_to_share:
+                found = True
+                spassword = check[1]
+        if not found:
+            self._send_message(user,self.NOTFOUND)
+            user.close()
+            return False
+        self._send_message(user,self.GOAHEAD)
+        password = self._recieve_message(user,size=self.LARGESIZE)
+        if password == spassword:
+            self._send_message(user,self.GOAHEAD)
+            user.close()
+            return True
+        self._send_message(user,self.AUTHERROR)
+        user.close()
+        return False
     def share(self,user):
         username = self._authenticate(user)
         if not username:
