@@ -36,6 +36,7 @@ class connection():
         #other
         self.LARGESIZE = 20000
         self.KEYTIMEOUT = 3600 #seconds, one hour
+        self.TIMEOUT = 10
     def start(self)->None:
         print("online")
         self.s = socket.socket()
@@ -43,7 +44,7 @@ class connection():
         self.s.listen(5)
         while True:
             c,addr = self.s.accept()
-            
+            c.settimeout(self.TIMEOUT)
             print("got connection from",addr)
             
             threading.Thread(target=self.handler,args=[c,addr]).start()
@@ -54,7 +55,12 @@ class connection():
         generating_key = True
         if generating_key:
             diffie = DH()
-            modulus = int(self._recieve_message(c,setup=True))
+            try:
+                modulus = int(self._recieve_message(c,setup=True))
+            except:
+                self.log(ip,"ping")
+                c.close()
+                return
             self._send_message(c," ",setup=True)
             base = int(self._recieve_message(c,setup=True))
             self._send_message(c," ",setup=True)
@@ -94,14 +100,16 @@ class connection():
                 print("command",command)
                 self._send_message(c,self.FAILURE)
                 c.close()
+        self.log(ip,command)
+        print(command)
+    def log(self,ip,command):
         current_time = time.time()
         os.chdir(os.path.split(__file__)[0])
         entry = f"{ip},{command},{current_time}\n"
         file = open("log.txt","a")
         file.write(entry)
         file.close()
-        print(command)
-
+        return True
     def _send_message(self,sock,message,setup=False)->None:
         message = str(message)
         if setup:
@@ -419,15 +427,15 @@ class connection():
         self._send_message(user,content)
         user.close()
     def login(self,user):
-        self._send_message(user,self,GOAHEAD)
+        self._send_message(user,self.GOAHEAD)
         username = self._recieve_message(user)
-        file = open(USERACCOUNTS,"r")
+        file = open(self.USERACCOUNTS,"r")
         content = file.read()
         content = content.split("\n")
         found = False
         for line in content:
             check = line.split(",")
-            if check[0] == user_to_share:
+            if check[0] == username:
                 found = True
                 spassword = check[1]
         if not found:
