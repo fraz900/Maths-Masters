@@ -2,6 +2,8 @@ import tkinter as tk
 from PIL import Image, ImageTk
 from online.client import *
 import os
+import time
+import threading
 class GUI():
 
     def __init__(self):
@@ -35,21 +37,24 @@ class GUI():
         frame = tk.Frame(top)
         name_var=tk.StringVar()
         passw_var=tk.StringVar()
-
+        def handler():
+            threading.Thread(target=start_loading).start()
+            #start_loading()
+            t = threading.Thread(target=submit).start()
+            t.join()
         def submit():
             name=name_var.get()
             password=passw_var.get()
-             
             print("The name is : " + name)
             print("The password is : " + password)
-            start_loading()
             try:
                 check = self.c.login(name,password)
                 if check:
                     top.destroy()
-                    self.main()
+                    self.menu()
             except:
                 login_error.config(text="username or password incorrect",fg="red")
+            end_loading()
             name_var.set("")
             passw_var.set("")
 
@@ -59,7 +64,7 @@ class GUI():
         name_entry = tk.Entry(txt_frm,textvariable = name_var, font=('calibre',10,'normal'))
         passw_label = tk.Label(txt_frm, text = 'Password', font = ('calibre',10,'bold'))
         passw_entry = tk.Entry(txt_frm, textvariable = passw_var, font = ('calibre',10,'normal'), show = '*')
-        sub_btn=tk.Button(txt_frm,text = 'Submit', command = submit)
+        sub_btn=tk.Button(txt_frm,text = 'Submit', command = handler)
         
         login_error = tk.Label(txt_frm,text="",font=("calibre",10))
 
@@ -87,27 +92,32 @@ class GUI():
         for imagefile in imagelist:
             photo = Image.open(imagefile)
             giflist.append(photo)
-        timer_id = None
-        def start_loading(n=0):
-            global timer_id
+        global repeat
+        repeat = True
+        def start_loading(n=1):
             gif = giflist[n%len(giflist)]
-            resizer = ImageTk.PhotoImage(gif.resize((50,50),Image.ANTIALIAS))
-            canvas.create_image(235,25, image=resizer)
-            timer_id = top.after(100, start_loading, n+1)
-        
-        #resizer = ImageTk.PhotoImage(giflist[2].resize((50,50),Image.ANTIALIAS))
-        #canvas.create_image(235,25, image=resizer)
-
-
-        top.resizable(True,True)
+            top.resizer = resizer = ImageTk.PhotoImage(gif.resize((50,50),Image.ANTIALIAS))
+            img = canvas.create_image(235,25, image=top.resizer)
+            print(repeat)
+            if repeat:
+                timer_id = top.after(100, start_loading, n+1)
+            else:
+                canvas.delete(img)
+        def end_loading():
+            global repeat
+            repeat = False
+        #start_loading()
+        top.resizable(False,False)
         top.mainloop()
 
         #TODO
         #1. make gif work please
         
-    def main(self):
-        print("ayyyyy")
-
+    def menu(self):
+        top = tk.Tk()
+        top.geometry("400x500")
+        top.resizable(True,True)
+        top.mainloop()
 if __name__ == "__main__":
     g = GUI()
     g.start()
