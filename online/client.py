@@ -250,6 +250,16 @@ class connection():
         file.write(entry)
         file.close()
         return namer
+
+    def ping(self):
+        try:
+            self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.s.connect((self.SERVER_IP,self.PORT))
+            data = self._recieve_message(setup=True)
+            self.s.close()
+            return True
+        except:
+            return False
     def login(self,username,password):
         hasher = hashlib.sha256()
         hasher.update(password.encode())
@@ -395,6 +405,8 @@ class connection():
 if __name__ == "__main__":      
     c = connection()
     #a = c.get_auth_token()
+    print(c.ping())
+    time.sleep(1)
     name = c.upload("this do be a test 2699","testing234",shared=False)
     time.sleep(1)
     print(c.view(name))
