@@ -4,20 +4,24 @@ from online.client import *
 import os
 import time
 import threading
+import ctypes
+
 class GUI():
 
     def __init__(self):
         self.c = connection()
+        user32 = ctypes.windll.user32
+        self.resolution = user32.GetSystemMetrics(0),user32.GetSystemMetrics(1)
 
     def start(self):
         if self.c.ping():
            self.login()
         else:
-            self.error("connection error, cannot connect to server.\n Please try again later")
+            self.error("Connection error, cannot connect to server.\n Please try again later")
 
     def error(self,error_message):
         top = tk.Tk()
-
+        top.title("ERROR")
         top.geometry("300x100")
         
         error_label = tk.Label(top, text = error_message, font=('calibre',10, 'bold'))  
@@ -30,6 +34,7 @@ class GUI():
         
         c = connection()
         top = tk.Tk()
+        top.title("login")
         canvas=tk.Canvas(top, width=400, height=500)
         canvas.grid(row=1,column=0)
 
@@ -41,7 +46,10 @@ class GUI():
             threading.Thread(target=start_loading).start()
             #start_loading()
             t = threading.Thread(target=submit).start()
-            t.join()
+            try:
+                t.join()
+            except:
+                None
         def submit():
             name=name_var.get()
             password=passw_var.get()
@@ -110,14 +118,40 @@ class GUI():
         top.resizable(False,False)
         top.mainloop()
 
-        #TODO
-        #1. make gif work please
         
     def menu(self):
         top = tk.Tk()
-        top.geometry("400x500")
+        size = f"{self.resolution[0]}x{self.resolution[1]}"
+        top.geometry(size)
+        top.title("menu")
+        
+        canvas=tk.Canvas(top, width=self.resolution[0], height=self.resolution[1])
+        canvas.grid(row=0,column=0)
+        top.grid_rowconfigure(0, weight=1)
+        top.grid_columnconfigure(0, weight=1)
+        def play():
+            top.destroy()
+            self.game()
+        def exiter():
+            top.destroy()
+            exit()
+        frame = tk.Frame(top,width=400,height=250)
+        frame.grid(row=0,column=0, sticky="n")
+        
+        play_button = tk.Button(frame,text = "play", command = play)
+        play_button.grid(row=1,column=1,padx=10,pady=10)
+
+        exit_button = tk.Button(frame,text="exit",command=exiter)
+        exit_button.grid(row=2,column=1)
+
+        
         top.resizable(True,True)
         top.mainloop()
+
+    def game(self):
+        print("ayy")
+
+        
 if __name__ == "__main__":
     g = GUI()
     g.start()
