@@ -95,7 +95,7 @@ class connection():
             case self.GETOWNERSHIP:
                 self.get_ownership(c)
             case self.CHECKLOGIN:
-                self.login(c)
+                self.login(c,ip)
             case _:
                 print("command",command)
                 self._send_message(c,self.FAILURE)
@@ -426,7 +426,7 @@ class connection():
         file.close()
         self._send_message(user,content)
         user.close()
-    def login(self,user):
+    def login(self,user,ip):
         self._send_message(user,self.GOAHEAD)
         username = self._recieve_message(user)
         file = open(self.USERACCOUNTS,"r")
@@ -440,15 +440,18 @@ class connection():
                 spassword = check[1]
         if not found:
             self._send_message(user,self.NOTFOUND)
+            self.log(ip,f"login {username} not found")
             user.close()
             return False
         self._send_message(user,self.GOAHEAD)
         password = self._recieve_message(user,size=self.LARGESIZE)
         if password == spassword:
             self._send_message(user,self.GOAHEAD)
+            self.log(ip,f"login {username} correct")
             user.close()
             return True
         self._send_message(user,self.AUTHERROR)
+        self.log(ip,f"login {username} incorrect")
         user.close()
         return False
     def share(self,user):
