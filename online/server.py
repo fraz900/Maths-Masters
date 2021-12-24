@@ -5,6 +5,7 @@ import time
 import threading
 import os
 import sys
+import time
 from encryption import DH,AES
 class connection():
     def __init__(self):
@@ -18,10 +19,13 @@ class connection():
         self.NOTALLOWED = "500"
         self.GOAHEAD = "200"
         self.INVALID = "501"
+        self.MATCHMAKINGERROR = "100"
         #files
         self.AUTHCODES = "active_auth_codes.txt"
         self.USERACCOUNTS = "user_accounts.txt"
         self.MANIFEST = "manifest.txt"
+        self.LFG = "lfg.txt"
+        self.ACTIVEGAMES = "games.txt"
         #commands
         self.REFRESHAUTH = "rac"
         self.CREATEACCOUNT = "ca"
@@ -33,6 +37,7 @@ class connection():
         self.CHECKLOGIN = "cl"
         self.CHECKAUTH_COMMAND = "cac"
         self.GETOWNERSHIP = "go"
+        self.MATCHMAKING = "mm"
         #other
         self.LARGESIZE = 20000
         self.KEYTIMEOUT = 3600 #seconds, one hour
@@ -96,6 +101,8 @@ class connection():
                 self.get_ownership(c)
             case self.CHECKLOGIN:
                 self.login(c,ip)
+            case self.MATCHMAKING:
+                self.matchmaking(c)
             case _:
                 print("command",command)
                 self._send_message(c,self.FAILURE)
@@ -622,7 +629,64 @@ class connection():
 
     def _size(self,s)->int:
         return len(s.encode('utf-8')) 
-        
+
+    def matchmaking(self,user):
+        username = self._authenticate(user)
+        if not username:
+            user.close()
+            return False
+        self._recieve_message(user)
+        self._send_message(user,self.GOAHEAD)
+        self._recieve_message(user)
+
+        #consider level comparison for better matchmaking
+
+        file = open(self.LFG,"r")
+        content = file.read()
+        file.close()
+        content = content.split("\n")
+        if len(content) == 0:
+            file = open(self.LFG,"a")
+            entry = f"{username}\n"
+            file.write(entry)
+            file.close()
+            counter = 0
+            while True:
+                counter += 1
+                if counter >=300:
+                    #matchmaking error
+
+                #give info and start game
+                time.sleep(1)
+        else:
+            opponent = content[0]
+            content = content.pop(0)
+            entry = "\n".join(content)
+            file = open(self.LFG,w)
+            file.write(entry)
+            file.close()
+            namer = f"{username},{opponent}"
+            entry = namer + "\n"
+            file = open(self.ACTIVEGAMES,"a")
+            file.write(entry)
+            file.close()
+            parent = os.getcwd()
+            next_level = os.path.join(parent,"games")
+            final_level = os.path.join(next_level,namer)
+            os.mkdir(final_level)
+            score_path = os.path.join(final_level,f"{username} score.txt")
+            file = open(score_path,"w")
+            file.write("0")
+            file.close()
+            self._send_message(self.s,self.GOAHEAD)
+            self._recieve_message(self.s)
+            self._send_messge(self.s,namer)
+            
+            
+        #log request
+        #hold request for 5 minutes
+        #if matching request comes link em
+        #if not return matchmaking error
             
 if __name__ == "__main__":
     a = connection()
