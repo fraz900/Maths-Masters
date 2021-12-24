@@ -53,8 +53,6 @@ class GUI():
         def submit():
             name=name_var.get()
             password=passw_var.get()
-            print("The name is : " + name)
-            print("The password is : " + password)
             try:
                 check = self.c.login(name,password)
                 if check:
@@ -121,11 +119,13 @@ class GUI():
         
     def menu(self):
         top = tk.Tk()
-        size = f"{self.resolution[0]}x{self.resolution[1]}"
+        #size = f"{self.resolution[0]}x{self.resolution[1]}"
+        size = "600x700"
         top.geometry(size)
         top.title("menu")
-        
-        canvas=tk.Canvas(top, width=self.resolution[0], height=self.resolution[1])
+        top.configure(bg="red")
+        #canvas=tk.Canvas(top, width=self.resolution[0], height=self.resolution[1])
+        canvas = tk.Canvas(top,width=400,height=500)
         canvas.grid(row=0,column=0)
         top.grid_rowconfigure(0, weight=1)
         top.grid_columnconfigure(0, weight=1)
@@ -149,7 +149,12 @@ class GUI():
         top.mainloop()
 
     def game(self):
-        print("ayy")
+        top = tk.Tk()
+        size = f"{self.resolution[0]}x{self.resolution[1]}"
+        top.geometry(size)
+        top.title("game")
+        top.resizeable(True,True)
+        top.mainloop()
 
         
 if __name__ == "__main__":
