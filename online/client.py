@@ -1,12 +1,14 @@
 import socket
 import hashlib
 import time
+from threading import Thread
 try:
     from online.encryption import DH,AES
 except:
     from encryption import DH,AES
 class connection():
-    def __init__(self,IP="127.0.0.1",PORT=12345):
+    def __init__(self,IP="127.0.0.1",PORT=12345,debug=False):
+        self.DEBUG = debug
         #network things
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.SERVER_IP = IP
@@ -22,10 +24,11 @@ class connection():
         self.CHECKLOGIN = "cl"
         self.CHECKAUTH_COMMAND = "cac"
         self.GETOWNERSHIP = "go"
+        self.MATCHMAKING = "mm"
         #responses
         self.GOAHEAD = "200"
         self.WARNINGS = {"400":"client error, incorrect command","401":"authentication error, failure to authenticate","404":"resource not found","500":"Data not allowed","501":"invalid resource"}
-
+        self.MATCHMAKINGERROR = "100"
         #other
         try:
             file = open("details.txt","r")
@@ -41,28 +44,31 @@ class connection():
         self.AUTHCODE = None
         self.LARGESIZE = 20000
         self.UPLOADS = "uploads.txt"
-        
+
+    def print1(self,message):
+        if self.DEBUG:
+            print(message)
     def _send_message(self,sock,message,setup=False):
         message = str(message)
-        print(f"sent : {message}")
+        self.print1(f"sent : {message}")
         if setup:
             sock.sendall(str(message).encode())
         else:
             a = AES(message)
             encrypted_message = a.encrypt(self.key)
-            print(self._size(encrypted_message))
+            self.print1(self._size(encrypted_message))
             sock.sendall(encrypted_message.encode())
             
     def _recieve_message(self,size=1024,setup=False):
         data = self.s.recv(size)
         data = data.decode()
         if setup:
-            print(f"recieved : {data}")
+            self.print1(f"recieved : {data}")
             return data.strip()
         else:
             a = AES(data)
             message = a.decrypt(self.key)
-            print(f"recieved : {message}")
+            self.print1(f"recieved : {message}")
             return message.strip()
 
     def _error_handling(self,error):
@@ -401,7 +407,43 @@ class connection():
         self._send_message(self.s,self.GOAHEAD)
         content = self._recieve_message(size=size)
         return content
-        
+
+    def matchmaking(self):
+        auth = self.authenticated_start()
+        self._initiate_connection()
+        self._send_message(self.s,self.MATCHMAKING)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,auth)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,self.GOAHEAD)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        Thread(target=self._monitor_matchmaking,args=[self.s]).start()
+        #set up matchmaking request
+        #start a seperate thread to monitor matchmaking
+        #if error end queue
+        #else start game with seperate game request
+    def _monitor_matchmaking(self,connection):
+        self._send_message(connection,self.GOAHEAD)
+        while True:
+            try:
+                data = self._recieve_message()
+                if data == self.MATCHMAKINGERROR:
+                    #raise error
+                    break
+                elif data == self.GOAHEAD:
+                    self._send_message(self.s,self.GOAHEAD)
+                    
+                    #game start
+                else:
+                    self._error_handling(data)
+            except:
+                None
 if __name__ == "__main__":      
     c = connection()
     #a = c.get_auth_token()
