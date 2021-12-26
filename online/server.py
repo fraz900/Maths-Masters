@@ -38,6 +38,11 @@ class connection():
         self.CHECKAUTH_COMMAND = "cac"
         self.GETOWNERSHIP = "go"
         self.MATCHMAKING = "mm"
+        self.CHECKMATCHMAKING = "cmm"
+        self.CHECKSCORES = "cs"
+        self.STARTGAME = "sc"
+        self.CHANGESCORES = "css"
+        self.GENERATEKEY = "gk"
         #other
         self.LARGESIZE = 20000
         self.KEYTIMEOUT = 3600 #seconds, one hour
@@ -57,7 +62,20 @@ class connection():
     def handler(self,c,ip)->None:
         os.chdir(os.path.split(__file__)[0])
         self._send_message(c,self.GOAHEAD,setup=True)
-        generating_key = True
+        check = self._recieve_message(c,setup=True)
+        if check == self.GENERATINGKEY:
+            generating_key = True
+        else:
+            command = self._recieve_message(c,setup=True)
+            if not command:
+                return
+            command = command.strip()
+            
+            match command:#unencrypted commands
+                case self.CHECKSCORES:
+                    self.get_scores(c)
+                case self.CHANGESCORES:
+                    self.change_score(c)
         if generating_key:
             diffie = DH()
             try:
@@ -80,7 +98,7 @@ class connection():
         if not command:
             return
         command = command.strip()
-        match command:
+        match command:#encrypted commands
             case self.REFRESHAUTH:
                 self.refresh_token(c)
             case self.CREATEACCOUNT:
@@ -103,6 +121,8 @@ class connection():
                 self.login(c,ip)
             case self.MATCHMAKING:
                 self.matchmaking(c)
+            case self.CHECKMATCHMAKING:
+                self.check_matchmaking(c)
             case _:
                 print("command",command)
                 self._send_message(c,self.FAILURE)
@@ -630,14 +650,13 @@ class connection():
     def _size(self,s)->int:
         return len(s.encode('utf-8')) 
 
-    def matchmaking(self,user):
+    def matchmaking(self,user):#nt
         username = self._authenticate(user)
         if not username:
             user.close()
             return False
         self._recieve_message(user)
-        self._send_message(user,self.GOAHEAD)
-        self._recieve_message(user)
+
 
         #consider level comparison for better matchmaking
 
@@ -651,13 +670,8 @@ class connection():
             file.write(entry)
             file.close()
             counter = 0
-            while True:
-                counter += 1
-                if counter >=300:
-                    #matchmaking error
-
-                #give info and start game
-                time.sleep(1)
+            self._send_message(user,self.MATCHMAKING)
+            return True
         else:
             opponent = content[0]
             content = content.pop(0)
@@ -678,15 +692,159 @@ class connection():
             file = open(score_path,"w")
             file.write("0")
             file.close()
-            self._send_message(self.s,self.GOAHEAD)
-            self._recieve_message(self.s)
-            self._send_messge(self.s,namer)
-            
-            
-        #log request
-        #hold request for 5 minutes
-        #if matching request comes link em
-        #if not return matchmaking error
+            oscore_path = os.path.join(final_level,f"{oppponent} score.txt")
+            file = open(oscore_path,"w")
+            file.write("0")
+            file.close()
+            self._send_message(self.s,"fg")
+
+    def check_matchmaking(self,user):#nt
+        username = self._authenticate(user)
+        if not username:
+            user.close()
+            return False
+        file = open(self.ACTIVEGAMES,"r")
+        data = file.read()
+        file.close()
+        data = data.split("\n")
+        for line in data:
+            players = data.split(",")
+            if username == player[0] or username == players[1]:
+                self._send_message(user,line)
+                user.close()
+                return True
+        self._send_message(user,self.MATCHMAKING)
+
+    def start_game(self,user):#nt
+        username = self._authenticate(user)
+        if not username:
+            user.close()
+            return False
+        self._send_message(user,self.GOAHEAD)
+        match_name = self._recieve_message(user)
+
+        parent = os.getcwd()
+        next_level = os.path.join(parent,"games")
+        final_level = os.path.join(next_level,match_name)
+        check_path = os.path.join(final_level,"ready")
+        try:
+            file = open(check_path,"r")
+            content = file.read()
+            file.close()
+            file = open(check_path,"w")
+            file.write("2")
+            file.close()
+            self._send_message(user,self.GOAHEAD)
+            self._recieve_message(user)
+            code = secrets.token_hex()
+            token_path = os.path.join(final_level,f"{username} token")
+            file = open(token_path,"w")
+            file.write(code)
+            file.close()
+            self._send_message(user,code)
+            user.close()
+            return True
+        except:
+            file = open(check_path,"w")
+            file.write("1")
+            file.close()
+            self._send_message(user,self.MATCHMAKING)
+        counter = 0
+        while True:
+            counter += 1
+            file = open(check_path,"r")
+            content = file.read()
+            file.close()
+            if content == "2":
+                self._send_message(user,self.GOAHEAD)
+                self._recieve_message(user)
+                code = secrets.token_hex()
+                token_path = os.path.join(final_level,f"{username} token")
+                file = open(token_path,"w")
+                file.write(code)
+                file.close()
+                self._send_message(user,code)
+                user.close()
+                return True
+            if counter >=60: #somewhat arbitrary
+                self._send_message(user,self.MATCHMAKINGERROR)
+                user.close()
+                return False
+            time.sleep(1)
+        
+    def get_scores(self,user):#nt
+        self._send_message(user,self.GOAHEAD,setup=True)
+        match_name = self._recieve_message(user,setup=True)
+        parent = os.getcwd()
+        next_level = os.path.join(parent,"games")
+        final_level = os.path.join(next_level,match_name)
+        try:
+            os.chdir(final_level)
+        except:
+            self._send_message(user,self.NOTFOUND,setup=True)
+            user.close()
+            return False
+        self._send_message(user,self.GOAHEAD,setup=True)
+        username = self._recieve_message(user,setup=True)
+        try:
+            opponent = (match_name.replace(username,"")).replace(",","")
+        except:
+            self._send_message(user,self.NOTFOUND,setup=True)
+            user.close()
+            return False
+        self._send_message(user,self.GOAHEAD,setup=True)
+        user_score_file = f"{username} score.txt"
+        opponent_score_file = f"{opponent} score.txt"
+        file = open(user_score_file,"r")
+        user_score = file.read()
+        file.close()
+        file = open(opponent_socre_file,"r")
+        opponent_score = file.read()
+        file.close()
+        self._recieve_message(user,setup=True)
+        self._send_message(user,user_score,setup=True)
+        self._recieve_message(user,setup=True)
+        self._send_message(user,opponent_score,setup=True)
+        user.close()
+        return True
+    def change_score(self,user):#nt        
+        self._send_message(user,self.GOAHEAD,setup=True)
+        match_name = self._recieve_message(user,setup=True)
+        parent = os.getcwd()
+        next_level = os.path.join(parent,"games")
+        final_level = os.path.join(next_level,match_name)
+        try:
+            os.chdir(final_level)
+        except:
+            self._send_message(user,self.NOTFOUND,setup=True)
+            user.close()
+            return False
+        self._send_message(user,self.GOAHEAD,setup=True)
+        username = self._recieve_message(user,setup=True)
+        token_name = f"{username} token.txt"
+        try:
+            file = open(token_name,"r")
+            token = file.read()
+            file.close()
+        except:
+            self._send_message(user,self.NOTFOUND,setup=True)
+            user.close()
+            return False
+        self._send_message(user,self.GOAHEAD,setup=True)
+        attempt = self._recieve_message(user,setup=True,size=self.LARGESIZE)
+        if attempt != token:
+            self._send_message(user,self.AUTHERROR,setup=True)
+            user.close()
+            return False
+        self._send_message(user,self.GOAHEAD,setup=True)
+        new_score = self._recieve_message(user,setup=True)
+        score_name = f"{username} score"
+        file = open(score_name,"w")
+        file.write(new_score)
+        file.close()
+        self._send_message(user,self.GOAHEAD,setup=True)
+        user.close()
+        return True
             
 if __name__ == "__main__":
     a = connection()
