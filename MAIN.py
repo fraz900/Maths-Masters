@@ -38,7 +38,7 @@ class GUI():
         canvas=tk.Canvas(top, width=400, height=500)
         canvas.grid(row=1,column=0)
 
-        top.geometry("400x500")
+        top.geometry("450x500")
         frame = tk.Frame(top)
         name_var=tk.StringVar()
         passw_var=tk.StringVar()
@@ -125,18 +125,18 @@ class GUI():
         top.title("menu")
         top.configure(bg="red")
         #canvas=tk.Canvas(top, width=self.resolution[0], height=self.resolution[1])
-        canvas = tk.Canvas(top,width=400,height=500)
+        canvas = tk.Canvas(top,width=600,height=350)
         canvas.grid(row=0,column=0)
-        top.grid_rowconfigure(0, weight=1)
-        top.grid_columnconfigure(0, weight=1)
+        top.grid_rowconfigure(0, weight=0)
+        top.grid_columnconfigure(0, weight=0)
         def play():
             top.destroy()
-            self.game()
+            self.game_menu()
         def exiter():
             top.destroy()
             exit()
-        frame = tk.Frame(top,width=400,height=250)
-        frame.grid(row=0,column=0, sticky="n")
+        frame = tk.Frame(top,width=400,height=100,bg="red")
+        frame.grid(row=1,column=0, sticky="n")
         
         play_button = tk.Button(frame,text = "play", command = play)
         play_button.grid(row=1,column=1,padx=10,pady=10)
@@ -147,8 +147,17 @@ class GUI():
         
         top.resizable(True,True)
         top.mainloop()
+    def game_menu(self):#TODO
+        None
 
-    def game(self):
+    def sp_game(self):#TODO
+        top = tk.Tk()
+        size = f"{self.resolution[0]}x{self.resolution[1]}"
+        top.geometry(size)
+        top.title("game")
+        top.resizeable(True,True)
+        top.mainloop()
+    def mp_game(self):#TODO
         top = tk.Tk()
         size = f"{self.resolution[0]}x{self.resolution[1]}"
         top.geometry(size)
