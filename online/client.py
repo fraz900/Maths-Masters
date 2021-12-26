@@ -25,6 +25,11 @@ class connection():
         self.CHECKAUTH_COMMAND = "cac"
         self.GETOWNERSHIP = "go"
         self.MATCHMAKING = "mm"
+        self.CHECKMATCHMAKING = "cmm"
+        self.CHECKSCORES = "cs"
+        self.STARTGAME = "sc"
+        self.CHANGESCORES = "css"
+        self.GENERATEKEY = "gk"
         #responses
         self.GOAHEAD = "200"
         self.WARNINGS = {"400":"client error, incorrect command","401":"authentication error, failure to authenticate","404":"resource not found","500":"Data not allowed","501":"invalid resource"}
@@ -81,7 +86,7 @@ class connection():
         raise Exception(error)
     def _size(self,s)->int:
         return len(s.encode('utf-8'))
-    def _initiate_connection(self):
+    def _initiate_connection(self,generate_key=True):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect((self.SERVER_IP,self.PORT))
         data = self._recieve_message(setup=True)
@@ -89,8 +94,8 @@ class connection():
             self._error_handling(data)
             return False
 
-        generate_key = True
         if generate_key:
+            self._send_message(self.s,self.GENERATEKEY,setup=True)
             diffie = DH()
             dhKey = diffie.generate_key()
             modulus = diffie.generate_prime()
@@ -105,6 +110,8 @@ class connection():
             final = diffie.equation(bg,dhKey,modulus)
             a = AES("")
             self.key = a.produce_key(final)
+        else:
+            self._send_message(self.s,self.GOAHEAD,setup=True)
     def get_auth_token(self):
         current_time = time.time()
         try:
@@ -408,7 +415,7 @@ class connection():
         content = self._recieve_message(size=size)
         return content
 
-    def matchmaking(self):
+    def matchmaking(self):#nt
         auth = self.authenticated_start()
         self._initiate_connection()
         self._send_message(self.s,self.MATCHMAKING)
@@ -421,29 +428,109 @@ class connection():
             self._error_handling(data)
         self._send_message(self.s,self.GOAHEAD)
         data = self._recieve_message()
+        if data.strip() == self.MATCHMAKING:
+            return 1
+        elif data.strip() == "fg":
+            return 2
+        else:
+            return 0
+        #0 = error
+        #1 = mathcmaking
+        #2 = game found
+    def check_matchmaking(self):#nt
+        auth = self.authenticated_start()
+        self._initiate_connection()
+        self._send_message(self.s,self.CHECKMATCHMAKING)
+        data = self._recieve_message()
         if data.strip() != self.GOAHEAD:
             self._error_handling(data)
-        Thread(target=self._monitor_matchmaking,args=[self.s]).start()
-        #set up matchmaking request
-        #start a seperate thread to monitor matchmaking
-        #if error end queue
-        #else start game with seperate game request
-    def _monitor_matchmaking(self,connection):
-        self._send_message(connection,self.GOAHEAD)
+        self._send_message(self.s,auth)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        data = self._recieve_message()
+        if data.strip() == self.MATCHMAKING:
+            return False
+        else:
+            return data.strip() #match name
+        
+        
+    def start_game(self,matchname):#nt
+        auth = self.authenticated_start()
+        self._initiate_connection()
+        self._send_message(self.s,self.CHECKMATCHMAKING)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,auth)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        data = self._recieve_message()
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,match_name)
+        data = self._receive_message()
+        if data.strip() == self.GOAHEAD:
+            self._send_message(self.s,self.GOAHEAD)
+            code = self._receive_message(size=self.LARGESIZE)
+            return code
+        counter = 0
         while True:
             try:
                 data = self._recieve_message()
-                if data == self.MATCHMAKINGERROR:
-                    #raise error
-                    break
-                elif data == self.GOAHEAD:
+                if data.strip() == self.GOAHEAD:
                     self._send_message(self.s,self.GOAHEAD)
-                    
-                    #game start
+                    code = self._receive_message(size=self.LARGESIZE)
+                    return code
                 else:
-                    self._error_handling(data)
+                    return False
             except:
-                None
+                counter += 1
+                if counter >= 10:#arbitrary
+                    return False
+    def get_scores(self,match_name):#nt
+        self._initiate_connection(generate_key=False)
+        self._send_message(self.s,self.CHECKSCORES,setup=True)
+        data = self._recieve_message(setup=True)
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,match_name,setup=True)
+        data = self._recieve_message(setup=True)
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,self.USER_NAME,setup=True)
+        data = self._recieve_message(setup=True)
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,self.GOAHEAD,setup=True)
+        user_score = self._recieve_message(setup=True)
+        self._send_message(self.s,self.GOAHEAD,setup=True)
+        opponent_score = self._recieve_message(setup=True)
+        return(user_score,opponent_score)
+    def upload_score(self,token,score):#nt
+        self._initiate_connection(generate_key=False)
+        self._send_message(self.s,self.CHECKSCORES,setup=True)
+        data = self._recieve_message(setup=True)
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,match_name,setup=True)
+        data = self._recieve_message(setup=True)
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,self.USER_NAME,setup=True)
+        data = self._recieve_message(setup=True)
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,token,setup=True)
+        data = self._recieve_message(setup=True)
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        self._send_message(self.s,str(score),setup=True)
+        data = self._recieve_message(setup=True)
+        if data.strip() != self.GOAHEAD:
+            self._error_handling(data)
+        return True
 if __name__ == "__main__":      
     c = connection()
     #a = c.get_auth_token()
